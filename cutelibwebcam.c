@@ -1,6 +1,6 @@
 /*		
 	CuteLibWebcam is an easy to use and learn abstraction for v4l2 interface
-			Copyright (C) 2010  Joaquín Bogado
+			Copyright (C) 2010  Joaquín Bogado <jbogado@linti.unlp.edu.ar>
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
