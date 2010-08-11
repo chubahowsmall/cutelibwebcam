@@ -14,4 +14,12 @@ CuteLibWebcam is an easy to use and learn abstraction for v4l2 interface
         You should have received a copy of the GNU General Public License
         along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+Some parts of the code were extracted from 
+/*  V4L2 video capture example
+ *
+ *  This program can be used and distributed without restrictions.
+ *
+ *      This program is provided with the V4L2 API
+ *  see http://linuxtv.org/docs.php for more information
+ *
+ */
