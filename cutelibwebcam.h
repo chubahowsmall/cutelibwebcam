@@ -60,12 +60,15 @@ typedef struct {
 	int fd;
 	char * name;
 	int iomethod;
-	buffer_t * buf;
+	buffer_t * buf;					/*internal use*/
 	int n_buf;
 	struct v4l2_capability * cap;
 	struct v4l2_cropcap * cropcap;
 	struct v4l2_crop * crop;
     struct v4l2_format * fmt;
+	struct v4l2_buffer * v4lbuf;
+	struct timeval * tv;
+	fd_set * fds;				/*end of internal use*/
 } camdevice;
 
 

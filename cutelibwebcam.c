@@ -1,6 +1,6 @@
 /*		
 	CuteLibWebcam is an easy to use and learn abstraction for v4l2 interface
-			Copyright (C) 2010  Joaquín Bogado <jbogado@linti.unlp.edu.ar>
+			Copyright (C) 2010  Joaquín Bogado
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -43,7 +43,8 @@ int _xioctl(int fh, int request, void *arg){
 
 	return r;
 }
-int init_read(camdevice cam, unsigned int buffer_size){
+
+int init_read(camdevice * cam, unsigned int buffer_size){
 	buffer_t * b;
 	b = calloc(1, sizeof(buffer_t));
 	if (!b) {
@@ -54,10 +55,10 @@ int init_read(camdevice cam, unsigned int buffer_size){
 	if (!b[0].start) {
 		return ERR_MALLOC;
 	}
-	cam_setbuffer(&cam, b);
+	cam_setbuffer(cam, b);
 	return 0;
 }
-int init_mmap(camdevice cam, unsigned int buffer_size){
+int init_mmap(camdevice * cam, unsigned int buffer_size){
 	unsigned int n_buffers;
 	buffer_t * b;
 	struct v4l2_requestbuffers req;
@@ -65,7 +66,7 @@ int init_mmap(camdevice cam, unsigned int buffer_size){
 	req.count = 4;
 	req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	req.memory = V4L2_MEMORY_MMAP;
-	if (-1 == _xioctl(cam.fd, VIDIOC_REQBUFS, &req)) {
+	if (-1 == _xioctl(cam->fd, VIDIOC_REQBUFS, &req)) {
 		if (EINVAL == errno) {
 			return ERR_IOMETHOD;
 		} else {
@@ -86,20 +87,21 @@ int init_mmap(camdevice cam, unsigned int buffer_size){
 		buf.memory = V4L2_MEMORY_MMAP;
 		buf.index = n_buffers;
 
-		if (-1 == _xioctl(cam.fd, VIDIOC_QUERYBUF, &buf))
+		if (-1 == _xioctl(cam->fd, VIDIOC_QUERYBUF, &buf))
 			return ERR_VIDIOQUERYBUF;
 
 		b[n_buffers].length = buf.length;
 		b[n_buffers].start = mmap(NULL /* start anywhere */, buf.length, PROT_READ | PROT_WRITE /* required */,MAP_SHARED /* recommended */,
-						cam.fd, buf.m.offset);
+						cam->fd, buf.m.offset);
 
 		if (MAP_FAILED == b[n_buffers].start)
 			return ERR_MMAP;
 	}
-	cam_setbuffer(&cam, b);
+	cam_setbuffer(cam, b);
+	cam->n_buf = n_buffers;
 	return 0;
 }
-int init_usrp(camdevice cam, unsigned int buffer_size){
+int init_usrp(camdevice * cam, unsigned int buffer_size){
 	buffer_t * b;
 	unsigned int n_buffers;
 	struct v4l2_requestbuffers req;
@@ -107,7 +109,7 @@ int init_usrp(camdevice cam, unsigned int buffer_size){
 	req.count = 4;
 	req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	req.memory = V4L2_MEMORY_USERPTR;
-	if (-1 == _xioctl(cam.fd, VIDIOC_REQBUFS, &req)) {
+	if (-1 == _xioctl(cam->fd, VIDIOC_REQBUFS, &req)) {
 		if (EINVAL == errno) {
 			return ERR_IOMETHOD;
 		}
@@ -126,10 +128,11 @@ int init_usrp(camdevice cam, unsigned int buffer_size){
 			return ERR_MALLOC;
 		}
 	}
-	cam_setbuffer(&cam, b);
+	cam_setbuffer(cam, b);
+	cam->n_buf = n_buffers;
 	return 0;
 }
-int (*__init[])(camdevice cam, unsigned int buffer_size) = {init_read, init_mmap, init_usrp};
+int (*__init[])(camdevice * cam, unsigned int buffer_size) = {init_read, init_mmap, init_usrp};
 /********* End of private section *******************/
 
 int cam_init(camdevice * cam){
@@ -200,7 +203,7 @@ int cam_init(camdevice * cam){
 	if (cam->fmt->fmt.pix.sizeimage < min)
 		cam->fmt->fmt.pix.sizeimage = min;
 	
-	cam_catcherror(__init[cam->iomethod](*cam, cam->fmt->fmt.pix.sizeimage));
+	cam_catcherror(__init[cam->iomethod](cam, cam->fmt->fmt.pix.sizeimage));
 	
 	return 0;
 }
@@ -236,12 +239,11 @@ int cam_startcapturing(camdevice * cam){
 		break;
 	case IO_METHOD_MMAP:
 		for (i = 0; i < cam->n_buf; ++i) {
-			struct v4l2_buffer buf;
-			memset(&buf, 0, sizeof(buf));
-			buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-			buf.memory = V4L2_MEMORY_MMAP;
-			buf.index = i;
-			if (-1 == _xioctl(cam->fd, VIDIOC_QBUF, &buf))
+			cam->v4lbuf = calloc(1, sizeof(struct v4l2_buffer));
+			cam->v4lbuf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+			cam->v4lbuf->memory = V4L2_MEMORY_MMAP;
+			cam->v4lbuf->index = i;
+			if (-1 == _xioctl(cam->fd, VIDIOC_QBUF, cam->v4lbuf))
 				return ERR_VIDIOQBUF;
 		}
 		type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -251,14 +253,13 @@ int cam_startcapturing(camdevice * cam){
 
 	case IO_METHOD_USERPTR:
 		for (i = 0; i < cam->n_buf; ++i) {
-			struct v4l2_buffer buf;
-			memset(&buf, 0, sizeof(buf));
-			buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-			buf.memory = V4L2_MEMORY_USERPTR;
-			buf.index = i;
-			buf.m.userptr = (unsigned long)cam->buf[i].start;
-			buf.length = cam->buf[i].length;
-			if (-1 == _xioctl(cam->fd, VIDIOC_QBUF, &buf))
+			cam->v4lbuf = calloc(1, sizeof(struct v4l2_buffer));
+			cam->v4lbuf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+			cam->v4lbuf->memory = V4L2_MEMORY_USERPTR;
+			cam->v4lbuf->index = i;
+			cam->v4lbuf->m.userptr = (unsigned long)cam->buf[i].start;
+			cam->v4lbuf->length = cam->buf[i].length;
+			if (-1 == _xioctl(cam->fd, VIDIOC_QBUF, cam->v4lbuf))
 				return ERR_VIDIOQBUF;
 		}
 		type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -269,6 +270,7 @@ int cam_startcapturing(camdevice * cam){
 	return 0;
 }
 int cam_stopcapturing(camdevice * cam){
+	
 	return 0;
 }
 int cam_uninit(camdevice * cam){
