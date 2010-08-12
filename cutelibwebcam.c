@@ -270,7 +270,19 @@ int cam_startcapturing(camdevice * cam){
 	return 0;
 }
 int cam_stopcapturing(camdevice * cam){
-	
+	enum v4l2_buf_type type;
+
+	switch (cam->iomethod) {
+	case IO_METHOD_READ:
+		/* Nothing to do. */
+		break;
+	case IO_METHOD_MMAP:
+	case IO_METHOD_USERPTR:
+		type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		if (-1 == _xioctl(cam->fd, VIDIOC_STREAMOFF, &type))
+			return ERR_VIDIOSTREAMOFF;
+		break;
+	}
 	return 0;
 }
 int cam_uninit(camdevice * cam){
@@ -294,6 +306,7 @@ int cam_catcherror(int err){
 		"Error mapping memory in mmap() call",
 		"Error VIDIOC_QBUF at ioctl",
 		"Error setting the device for streaming VIDIOC_STREAMON at ioctl",
+		"Error setting the device for streaming VIDIOC_STREAMOFF at ioctl",
 		NULL
 	};
 	printf("%s\n", msgerror[err]);
