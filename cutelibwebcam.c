@@ -286,6 +286,31 @@ int cam_stopcapturing(camdevice * cam){
 	return 0;
 }
 int cam_uninit(camdevice * cam){
+	unsigned int i;
+	switch (cam->iomethod) {
+        case IO_METHOD_READ:
+			free(cam->buf[0].start);
+            break;
+
+        case IO_METHOD_MMAP:
+			for (i = 0; i < cam->n_buf; ++i)
+				if (-1 == munmap(cam->buf[i].start, cam->buf[i].length))
+					return ERR_MUNMAP;
+			free(cam->v4lbuf);
+			break;
+
+        case IO_METHOD_USERPTR:
+			for (i = 0; i < cam->n_buf; ++i)
+				free(cam->buf[i].start);
+			free(cam->v4lbuf);
+            break;
+        }
+
+	free(cam->buf);
+	free(cam->cap);
+	free(cam->cropcap);
+	free(cam->crop);
+	free(cam->fmt);
 	return 0;
 }
 
@@ -307,6 +332,7 @@ int cam_catcherror(int err){
 		"Error VIDIOC_QBUF at ioctl",
 		"Error setting the device for streaming VIDIOC_STREAMON at ioctl",
 		"Error setting the device for streaming VIDIOC_STREAMOFF at ioctl",
+		"Error unmapping memory in munmap() call",
 		NULL
 	};
 	printf("%s\n", msgerror[err]);
